@@ -1,0 +1,21 @@
+AI USE SECTION: I used ai to help me figure out how to access the app, I didn't see the "The Five Open Issues" section, so I didn't now how to use the flask app or really interact with it, I gave the ai some of my terminal commands to set it up and told it I was using flask and it helped me get all the endpoints using terminal, and "FLASK_APP=app:create_app flask routes". Helpful. Everything else I mostly understood except for how to work with date times, I was unaware that you had to use .replace, which the ai informed me I had to use after I had some trouble.
+
+Instance is a folder that only contains the database, mixtape.db, where everything is pulled from. It is populated with data from seed_data.py. It contains ten tables, friendships       playlist, song, user, listening_event, playlist_entries, song_tags, notification, rating and tag, which all contain the necessary data to let the app function. The routes folder contains all of the endpoints, and manages the input received, such as handling unexpected inputs, missing inputs and casting inputs to be used in functions that carry out much of the apps jobs. All of the files in services handle carrying out much of the functions of the app, such as retrieving data from the database and editing the database based on the user's whims. All the files in the tests folder provide tests to check and see if the app works as it should. app.py sets up the actual app, it's endpoints and the database, and models.py sets up the precise columns and tables in the database. A pattern I noticed is that all the endpoints are in routes, and all the underlying logic is mostly in services, and most of the rest of the files are for setting everything up.
+
+The endpoint songs/search is handled in routes/songs.py, where it first check to make sure that the url contains the query parameter q before sending q to search_songs in services/search_service.py, where it looks for q in the song table and returns all of the songs it found as a list of dictionaries. This list of dictionaries is turned into a JSON back in songs.py, before being returned to the user.
+
+5 | The last song in a playlist never shows up
+This one was easy to reproduce, anytime you would use playlists/<playlist_id>/songs it would show you every song but the last one.
+Looking in playlists.py shows the endpoint playlists/<playlist_id>/songs, which does songs = get_playlist_songs(playlist_id), which is defined in playlist_service.py, which had the line return [song.to_dict() for song in songs[:-1]].
+return [song.to_dict() for song in songs[:-1]] returned as a list every song in songs but the last one, which, we want the last one to be included to I changed it to return [song.to_dict() for song in songs]. It worked
+
+4 | I got notified when a friend added my song to a playlist but not when they rated it
+To reproduce the bug just rate a song, and then you'll notice no notification is made. 
+The endpoint /<song_id>/rate is in song.py, where it does not make a notification. It does do rating = rate_song(user_id, song_id, int(score)), which is defined in notification_service, but this also does not have anything to make a notification.
+My solution was to use the function, create_notification, in notification_service, and use it in a similar style to how it is in the add_to_playlist function, but just change it up a little, such as by changing notification_type to be rating instead of song_added_to_playlist. I put the function in rate_song.  It worked
+
+2 | Friends Listening Now shows people from yesterday
+To reproduce the bug just use the /<user_id>/listening-now endpoint, and noticed that it returns people whose last_listened_at value is yesterday as well as today. 
+The endpoint in feed.py returns feed = get_friends_listening_now(user_id), get_friends_listening_now is defined in feed_service.py, where it looks at the user's friends whose last_listened_at is sooner than or equal to the cutoff date, cutoff = datetime.now(timezone.utc) - RECENT_THRESHOLD, where RECENT_THRESHOLD is 24 hours. Thus it could include people listening yesterday, so long as they listened within 24 hours of using that endpoint.
+I solved it by just making the cutoff midnight of datetime.now(timezone.utc), cutoff = datetime.now(timezone.utc).replace(hour = 0, minute = 0, second = 0, microsecond = 0). It worked
+
